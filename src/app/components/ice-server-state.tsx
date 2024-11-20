@@ -16,18 +16,6 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 
-interface IceCandidate {
-  foundation: string;
-  componentId: string;
-  protocol: string;
-  priority: string;
-  ip: string;
-  port: string;
-  candidateType: 'host' | 'relay' | 'srflx' | string;
-  relatedAddress: string | null;
-  relatedPort: string | null;
-}
-
 interface IceError {
   url: string;
   address: string | null;
@@ -45,7 +33,7 @@ interface State {
   relayIp: string;
   stunReachable: boolean;
   turnReachable: boolean;
-  candidates: IceCandidate[];
+  candidates: RTCIceCandidate[];
   errors: IceError[];
 }
 
@@ -67,21 +55,6 @@ export class IceServerState extends PureComponent<Props, State> {
     errors: [],
   };
   peer?: RTCPeerConnection;
-
-  parseCandidate(candidateString: string): IceCandidate {
-    const candidateParts = candidateString.split(' ');
-    return {
-      foundation: candidateParts[0],
-      componentId: candidateParts[1],
-      protocol: candidateParts[2],
-      priority: candidateParts[3],
-      ip: candidateParts[4],
-      port: candidateParts[5],
-      candidateType: candidateParts[7],
-      relatedAddress: candidateParts[9] || null,
-      relatedPort: candidateParts[11] || null,
-    };
-  }
 
   mapIceErrorCodeToStatus(errorCode: number): string {
     const statusMap: Record<number, string> = {
@@ -144,17 +117,17 @@ export class IceServerState extends PureComponent<Props, State> {
   };
   onIceCandidate = (event: RTCPeerConnectionIceEvent) => {
     console.log('icecandidate', event);
-    if (event.candidate) {
-      const parsedCandidate = this.parseCandidate(event.candidate.candidate);
+    const candidate = event.candidate;
+    if (candidate) {
       let turnReachable = this.state.turnReachable;
       let stunReachable = this.state.stunReachable;
       let publicIp = this.state.publicIp;
-      if (parsedCandidate.candidateType === 'srflx') {
+      if (candidate.type === 'srflx') {
         stunReachable = true;
-        publicIp = parsedCandidate.ip;
+        publicIp = candidate.address ?? '';
       }
 
-      if (parsedCandidate.candidateType === 'relay') {
+      if (candidate.type === 'relay') {
         turnReachable = true;
       }
       this.setState((state) => {
@@ -162,7 +135,7 @@ export class IceServerState extends PureComponent<Props, State> {
           turnReachable,
           stunReachable,
           publicIp,
-          candidates: [...state.candidates, parsedCandidate],
+          candidates: [...state.candidates, candidate],
         };
       });
     }
@@ -260,13 +233,17 @@ export class IceServerState extends PureComponent<Props, State> {
                 <b>TURN:</b>{' '}
                 {this.state.turnReachable
                   ? '✅ The TURN server is reachable!'
-                  : ''}
+                  : this.state.iceGatheringState === 'complete'
+                    ? '❌ Not Reachable'
+                    : 'Processing'}
               </Typography>
               <Typography variant="body2">
                 <b>STUN:</b>{' '}
                 {this.state.stunReachable
                   ? '✅ The STUN server is reachable!'
-                  : ''}
+                  : this.state.iceGatheringState === 'complete'
+                    ? '❌ Not Reachable'
+                    : 'Processing'}
               </Typography>
               {!!this.state.publicIp && (
                 <Typography variant="body2">
@@ -305,12 +282,12 @@ export class IceServerState extends PureComponent<Props, State> {
                 {this.state.candidates.map((candidate, index) => (
                   <TableRow key={index}>
                     <TableCell>{candidate.foundation}</TableCell>
-                    <TableCell>{candidate.componentId}</TableCell>
+                    <TableCell>{candidate.component}</TableCell>
                     <TableCell>{candidate.protocol}</TableCell>
                     <TableCell>{candidate.priority}</TableCell>
-                    <TableCell>{candidate.ip}</TableCell>
+                    <TableCell>{candidate.address}</TableCell>
                     <TableCell>{candidate.port}</TableCell>
-                    <TableCell>{candidate.candidateType}</TableCell>
+                    <TableCell>{candidate.type}</TableCell>
                     <TableCell>{candidate.relatedAddress || 'N/A'}</TableCell>
                     <TableCell>{candidate.relatedPort || 'N/A'}</TableCell>
                   </TableRow>
